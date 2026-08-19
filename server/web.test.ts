@@ -122,4 +122,17 @@ describe("web gateway", () => {
     const internal = await handle(new Request("http://web:8080/index.html"));
     expect(internal.status).toBe(200);
   });
+
+  test("accepts a configured public host behind TLS termination", async () => {
+    const handle = createWebHandler({
+      root,
+      publicOrigin: "https://flakey.example.test",
+      internalOrigin: "http://web:8080",
+    });
+
+    const response = await handle(new Request("http://flakey.example.test/index.html", {
+      headers: { origin: "https://flakey.example.test" },
+    }));
+    expect(response.status).toBe(200);
+  });
 });

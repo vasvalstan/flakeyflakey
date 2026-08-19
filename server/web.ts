@@ -190,12 +190,16 @@ export function createWebHandler(options: WebGatewayOptions): (request: Request)
     options.publicOrigin ? normalizeAllowedOrigin(options.publicOrigin, "WEB_PUBLIC_ORIGIN").origin : undefined,
     options.internalOrigin ? normalizeAllowedOrigin(options.internalOrigin, "WEB_INTERNAL_ORIGIN").origin : undefined,
   ].filter((origin): origin is string => Boolean(origin)));
+  const allowedHosts = new Set([...allowedOrigins].map((origin) => new URL(origin).host));
 
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const isHealthRequest = url.pathname === "/healthz";
 
-    if (!isHealthRequest && allowedOrigins.size > 0 && !allowedOrigins.has(url.origin)) {
+    // A hosting edge may terminate TLS before forwarding plain HTTP to Bun. The
+    // request authority must still match configuration; browser Origin headers
+    // remain subject to the exact scheme-aware check below.
+    if (!isHealthRequest && allowedHosts.size > 0 && !allowedHosts.has(url.host)) {
       return text("Misdirected request", 421, request.method);
     }
     const requestOrigin = request.headers.get("origin");
