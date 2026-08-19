@@ -1,0 +1,12 @@
+.git
+.gitignore
+.playwright-cli
+.flakey
+.DS_Store
+dist
+node_modules
+output
+coverage
+.env
+.env.*
+*.log

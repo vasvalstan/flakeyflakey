@@ -1,0 +1,42 @@
+{
+  "name": "flakey-qa-command-center",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@1.3.12",
+  "scripts": {
+    "setup": "bun install && playwright install chromium",
+    "dev": "bun run scripts/dev.ts",
+    "dev:web": "bun --bun vite --host 127.0.0.1 --strictPort",
+    "studio": "bun run server/index.ts",
+    "docker:up": "docker compose up --build",
+    "docker:up:bg": "docker compose up -d --build --wait",
+    "docker:down": "docker compose down --remove-orphans",
+    "docker:logs": "docker compose logs --follow",
+    "docker:ps": "docker compose ps",
+    "docker:shell:web": "docker compose exec web sh",
+    "docker:shell:runner": "docker compose exec studio-runner bash",
+    "docker:check": "docker compose config --quiet",
+    "visual:eval": "bun run scripts/visual-shadow-eval.ts",
+    "build": "tsc --noEmit && bun --bun vite build",
+    "preview": "bun --bun vite preview",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.1.1",
+    "@fontsource/jetbrains-mono": "^5.1.1",
+    "@playwright/test": "1.61.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
+  }
+}
