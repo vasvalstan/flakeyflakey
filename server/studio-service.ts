@@ -435,12 +435,13 @@ function validateUrl(value: unknown): string {
   return url.toString();
 }
 
-function replaceOrigin(value: string, from: string, to: string) {
+export function replaceOrigin(value: string, from: string, to: string) {
   const url = new URL(value);
   if (url.origin !== from) return url.toString();
   const target = new URL(to);
   url.protocol = target.protocol;
-  url.host = target.host;
+  url.hostname = target.hostname;
+  url.port = target.port;
   return url.toString();
 }
 
