@@ -98,3 +98,27 @@ test("a separate Actions process restores encrypted state and deduplicates Slack
     await expect(readState(statePath, "b".repeat(20), secret)).rejects.toThrow();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("explicit retry resumes a failed event while redelivery and successful retries stay deduplicated", async () => {
+  const dir=await mkdtemp(join(tmpdir(),"flakey-action-retry-"));
+  try {
+    const statePath=join(dir,"state.enc");
+    const task:Task={key,branch:scopeFor(event).branch,baseBranch:"develop",parentSha:"a".repeat(40),parentTree:"b".repeat(40),localBase:"b".repeat(40),reviewRounds:0};
+    await writeState(statePath,key,secret,{task,processed:[]});
+    let coding=0;
+    const deps={
+      github:new GitHub(async()=>"token",async url=>url.includes("/pulls?")?Response.json([]):new Response(null,{status:404})),
+      slack:{thread:async()=>event.text,reply:async()=>{}},
+      backend:async()=>({execute:async()=>({output:"",exitCode:0}),uploadFiles:async()=>[],downloadFiles:async()=>[]}),
+      code:async()=>{if(++coding===1)throw new Error("Transient failure");return {action:"stop" as const,title:"Recovered",summary:"",reply:"Recovered without publishing."};},
+    };
+    const options={statePath,stateKey:secret,signingSecret:"signing-secret",sleep:async()=>{}};
+    const failed=await runAction(event,deps,options);
+    expect(failed.diagnostic?.stage).toBe("code");expect(failed.processed).toContain(event.eventId);
+    await runAction(event,deps,options);expect(coding).toBe(1);
+    const recovered=await runAction(event,deps,{...options,retryFailedEvent:true});
+    expect(coding).toBe(2);expect(recovered.diagnostic).toBeUndefined();
+    await runAction(event,deps,{...options,retryFailedEvent:true});expect(coding).toBe(2);
+    expect(recovered.task?.reviewRounds).toBe(0);
+  } finally {await rm(dir,{recursive:true,force:true});}
+});

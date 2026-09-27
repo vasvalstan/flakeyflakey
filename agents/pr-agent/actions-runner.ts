@@ -9,9 +9,15 @@ type Dependencies = Parameters<typeof buildGraph>[0];
 // this deliberately does not claim Agent Server's exact checkpoint recovery.
 export async function runAction(event: AgentEvent, deps: Omit<Dependencies, "enqueue">, options: {
   statePath: string; stateKey: string; signingSecret: string; sleep: (ms: number) => Promise<unknown>;
+  retryFailedEvent?: boolean;
 }) {
   const key = scopeFor(event).key;
   let state = await readState(options.statePath, key, options.stateKey);
+  // Explicit manual retries may resume the event that actually failed. Normal
+  // Slack redelivery and already-successful events remain deduplicated.
+  if (options.retryFailedEvent && state.diagnostic && state.event?.eventId === event.eventId) {
+    state = { ...state, processed: state.processed?.filter(id => id !== event.eventId) };
+  }
   let next: AgentEvent | undefined = event;
   const graph = buildGraph({ ...deps, enqueue: async pending => { next = pending; } });
   let iterations = 0;

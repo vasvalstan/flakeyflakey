@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, writeFile, readFile, rename, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rename, rm, symlink } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,4 +28,30 @@ test("real Git export includes renamed, deleted and untracked files but rejects 
     await symlink("new.txt", join(directory, "link.txt"));
     expect(() => execFileSync("node", [script, base, "changes.json"], { cwd: directory, stdio: "pipe" })).toThrow();
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("export ignores generated untracked files without .gitignore and keeps tracked output changes and real file limits", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "flakey-agent-no-ignore-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: directory, encoding: "utf8" }).trim();
+  const script = fileURLToPath(new URL("../sandbox/export-changes.mjs", import.meta.url));
+  try {
+    git("init", "-q");
+    await mkdir(join(directory,"dist"));await mkdir(join(directory,"node_modules"));await mkdir(join(directory,"src"));
+    await writeFile(join(directory,"dist/tracked.txt"),"before");
+    await writeFile(join(directory,"src/heading.ts"),"before");
+    git("add",".");const base=git("write-tree");
+    await writeFile(join(directory,"dist/tracked.txt"),"after");
+    await writeFile(join(directory,"src/heading.ts"),"after");
+    await writeFile(join(directory,"src/heading.test.ts"),"new test");
+    await writeFile(join(directory,"dist/generated.js"),"generated");
+    for(let i=0;i<100;i++)await writeFile(join(directory,`node_modules/package-${i}.js`),"dependency");
+    const output=join(tmpdir(),`flakey-export-${directory.split("/").at(-1)}.json`);
+    try {
+      execFileSync("node",[script,base,output],{cwd:directory});
+      const changes=JSON.parse(await readFile(output,"utf8")) as Change[];
+      expect(changes.map(c=>c.path)).toEqual(["dist/tracked.txt","src/heading.test.ts","src/heading.ts"]);
+      for(let i=0;i<81;i++)await writeFile(join(directory,`src/real-${i}.ts`),"source");
+      expect(()=>execFileSync("node",[script,base,output],{cwd:directory,stdio:"pipe"})).toThrow();
+    } finally { await rm(output,{force:true}); }
+  } finally { await rm(directory,{recursive:true,force:true}); }
 });

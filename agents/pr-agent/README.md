@@ -106,11 +106,15 @@ GitHub queues runs per Slack thread (`queue: max`, no cancellation of an active 
 
 A killed runner or failed artifact upload can lose the latest state. This is job-level recovery, not Agent Server's exact checkpoint recovery. If state is missing for an existing branch, the agent stops rather than resetting review budgets or creating another PR. Recover the encrypted artifact before continuing. Notifications can be duplicated if a process dies after Slack accepts a reply but before state is saved.
 
+After an infrastructure fix, an operator can replay the failed event's existing encrypted input with `workflow_dispatch` on main. This restores the saved task and permits retrying the event that stopped with a diagnostic. Normal Slack redelivery and already-successful requests remain deduplicated; retrying does not reset the review budget. A new mention in the original Slack thread is also supported.
+
 Required checks are frozen dependency installation, application tests in `src`, `server`, and `scripts` with a 30-second default timeout, and a production build. Existing `test:e2e` and `test:soak` scripts are also required, with 25 soak cycles. Checks are selected from the immutable baseline. The tested file digest must still match before publication. GitHub independently runs equivalent checks on the PR.
 
 The current GitHub application baseline has no separate `test:e2e` or `test:soak` script. Its required `server/studio-service.test.ts` suite launches Chromium and tests recording, redaction, screenshots, replay and questionnaire flows. CI reports the absent optional scripts explicitly; it does not claim soak coverage.
 
 The coding sandbox has Bun, Git and Chromium, runs as `pwuser`, and receives no OpenAI, Slack, GitHub or LangSmith credentials. Outbound HTTPS is restricted to npm registries. Publication rejects secrets, workflow edits, agent self-modification, path traversal and verification-script changes. Diffs are limited to 80 regular files and 3 MB; repository archives to 30 MB. Concurrent external branch changes cause the agent to stop.
+
+Untracked dependency, build and test output is excluded from export even if the repository has no `.gitignore`. Tracked changes are still captured, and the file and byte limits still apply to the proposed source changes.
 
 The Actions job is limited to 120 minutes, each coding invocation to 20 minutes, and shell commands to 10 minutes. Sandboxes idle-stop after 30 minutes and are deleted a day after stopping. A later run reconstructs an expired sandbox from the published branch. Unpublished sandbox edits are not permanent.
 
