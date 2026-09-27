@@ -1,0 +1,33 @@
+{
+  "name": "flakey-pr-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "bun --watch receiver.ts",
+    "start": "bun receiver.ts",
+    "action": "bun scripts/run-action.ts",
+    "build:receiver": "bun build receiver.ts --target=bun --outfile=dist/receiver.js",
+    "build": "tsc --noEmit",
+    "snapshot": "bun scripts/create-snapshot.ts",
+    "doctor": "bun scripts/doctor.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "LANGSMITH_TRACING=false bun --no-env-file test tests",
+    "check": "bun run test && bun run typecheck"
+  },
+  "dependencies": {
+    "deepagents": "1.14.1",
+    "@langchain/langgraph": "1.4.18",
+    "@langchain/core": "1.2.13",
+    "@langchain/openai": "1.6.0",
+    "langchain": "1.5.14",
+    "langsmith": "0.10.5",
+    "hono": "4.13.7",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.7.2"
+  }
+}

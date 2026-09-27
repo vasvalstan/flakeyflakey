@@ -1,0 +1,10 @@
+{
+  "display_information": { "name": "Flakey Patch", "description": "Turn an agreed Slack task into a tested draft pull request", "background_color": "#202534" },
+  "features": { "bot_user": { "display_name": "Flakey Patch", "always_online": false } },
+  "oauth_config": { "scopes": {
+    "bot": ["app_mentions:read", "chat:write", "channels:history", "groups:history"]
+  } },
+  "settings": {
+    "org_deploy_enabled": false, "socket_mode_enabled": false, "token_rotation_enabled": false
+  }
+}

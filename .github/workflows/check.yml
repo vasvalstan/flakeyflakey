@@ -1,0 +1,74 @@
+name: Quality and browser checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agents/pr-agent
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.12"
+      - run: bun install --frozen-lockfile
+      - name: Agent workflow tests and typecheck (no external credentials)
+        run: bun --no-env-file run check
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ""
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.12"
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Chromium and system dependencies
+        run: bun --no-env-file node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Unit tests, typecheck, and production build
+        run: |
+          bun --no-env-file test --timeout 30000 ./src ./server ./scripts
+          bun --no-env-file run build
+      - name: Real browser workflow checks
+        run: |
+          if bun -e 'process.exit(require("./package.json").scripts?.["test:e2e"] ? 0 : 1)'; then
+            bun --no-env-file run test:e2e
+          fi
+      - name: Finite browser lifecycle soak
+        run: |
+          if bun -e 'process.exit(require("./package.json").scripts?.["test:soak"] ? 0 : 1)'; then
+            bun --no-env-file run test:soak 25
+          fi
+      - name: Retain verification reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-reports
+          path: |
+            playwright-report/
+            test-results/
+            output/soak/
+          retention-days: 7
+          if-no-files-found: ignore

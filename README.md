@@ -92,3 +92,7 @@ The shell commands enter as the same non-root users used by the app (`bun` in th
 5. Add timeline editing, richer assertions, trace capture, authentication setup fixtures, and governed Jira/Zephyr traceability.
 
 Smart sharding, provider-isolated cloud sandboxes, a browser extension, bidirectional Zephyr sync, and autonomous AI actions stay outside this MVP until the core record/replay loop is validated with users.
+
+## Slack-to-PR agent
+
+[Flakey Patch setup and usage](agents/pr-agent/README.md): Slack → GitHub Actions → tested draft PR into develop → Greptile → human merge.

@@ -20,8 +20,10 @@
     "visual:eval": "bun run scripts/visual-shadow-eval.ts",
     "build": "tsc --noEmit && bun --bun vite build",
     "preview": "bun --bun vite preview",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "test": "bun test --timeout 30000 ./src ./server ./scripts",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run test && bun run build",
+    "check:pr-agent": "bun --cwd agents/pr-agent run check"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.1",
