@@ -26,7 +26,7 @@ flowchart LR
 
 Example first request:
 
-> @Flakey Patch change the application's main heading from “Flakey QA Command Center” to “Flakey Test Lab”. Keep the layout and other text unchanged. Update a relevant test if one exists, and open a draft PR into develop.
+> @Flakey Patch change the application's main heading from “Know if you can ship. Know exactly why.” to “Ship with confidence. See the evidence.” Keep the layout and other text unchanged. Update a relevant test if one exists, and open a draft PR into develop.
 
 Use the actual heading visible in the app if it differs. Follow-ups in the same Slack thread reuse the same branch and PR. After a PR is closed or merged, start a new thread. If Greptile is late, mention the bot with “check the review”.
 
@@ -82,6 +82,8 @@ The Railway project's PR Environments setting uses **development** as its base. 
 
 The development configuration can remain undeployed while testing only temporary PR environments. Running previews consume Railway resources until the PR is closed or merged; deleting a preview does not delete the PR or GitHub branch. The production app is independent of these preview environments.
 
+The initial setup PR has a manually created `pr-1-setup-test` environment because it predates PR Environments being enabled. That environment requires explicit deletion after testing. Automatic creation and cleanup must be checked with the first new feature PR.
+
 ## Run state and limits
 
 GitHub queues runs per Slack thread (`queue: max`, no cancellation of an active run). Each graph step writes encrypted state on the runner. The workflow uploads only `state.enc`, including after ordinary failures, with 90-day artifact retention. Later jobs restore only authenticated state from this repository's trusted agent workflow on the default branch. Slack retries are deduplicated by event ID.
@@ -89,6 +91,8 @@ GitHub queues runs per Slack thread (`queue: max`, no cancellation of an active 
 A killed runner or failed artifact upload can lose the latest state. This is job-level recovery, not Agent Server's exact checkpoint recovery. If state is missing for an existing branch, the agent stops rather than resetting review budgets or creating another PR. Recover the encrypted artifact before continuing. Notifications can be duplicated if a process dies after Slack accepts a reply but before state is saved.
 
 Required checks are frozen dependency installation, application tests in `src`, `server`, and `scripts` with a 30-second default timeout, and a production build. Existing `test:e2e` and `test:soak` scripts are also required, with 25 soak cycles. Checks are selected from the immutable baseline. The tested file digest must still match before publication. GitHub independently runs equivalent checks on the PR.
+
+The current GitHub application baseline has no separate `test:e2e` or `test:soak` script. Its required `server/studio-service.test.ts` suite launches Chromium and tests recording, redaction, screenshots, replay and questionnaire flows. CI reports the absent optional scripts explicitly; it does not claim soak coverage.
 
 The coding sandbox has Bun, Git and Chromium, runs as `pwuser`, and receives no OpenAI, Slack, GitHub or LangSmith credentials. Outbound HTTPS is restricted to npm registries. Publication rejects secrets, workflow edits, agent self-modification, path traversal and verification-script changes. Diffs are limited to 80 regular files and 3 MB; repository archives to 30 MB. Concurrent external branch changes cause the agent to stop.
 
@@ -108,5 +112,7 @@ bun run doctor
 `bun run doctor` validates configured credentials, Slack history access, repository access, develop and the EU snapshot. It sends no Slack message, makes no model call and creates no PR. `--offline` only checks environment presence. `bun run snapshot` reuses or creates the tested EU sandbox image without uploading credentials. `bun run dev` starts the receiver on loopback; it needs an HTTPS forwarding endpoint for Slack to reach a local machine.
 
 Tests mock model and provider calls, including multi-step Astra Responses tool use, signed ingress, encrypted dispatch/state, Actions retry deduplication, failed verification, stale reviews, two-round correction limits and non-force publication. Live provider setup and the first real Slack task must be verified separately.
+
+Dependency exception: `deepagents@1.14.1` declares `langsmith <0.10.0`, but this package deliberately pins `langsmith@0.10.5`. Snapshot provisioning needs the newer `runConfig` API to capture a non-root `pwuser` environment; `0.9.0` lacks it. Keep this exception explicit until Deep Agents widens its peer range. Verification must include the agent tests, TypeScript checks and a disposable EU sandbox probe through `LangSmithSandbox` (execute and file upload/download), not installation alone. This does not establish compatibility with future SDK releases.
 
 References: [GitHub dispatch](https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event), [Actions concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency), [Slack events](https://docs.slack.dev/apis/events-api/), [Railway PR environments](https://docs.railway.com/guides/preview-deployments-with-pr-environments), [Greptile draft reviews](https://www.greptile.com/docs/code-review/developer-essentials), [Deep Agents sandboxes](https://docs.langchain.com/oss/javascript/deepagents/sandboxes).

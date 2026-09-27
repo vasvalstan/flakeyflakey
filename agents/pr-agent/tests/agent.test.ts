@@ -83,6 +83,31 @@ test("failed verification cannot reach GitHub publication", async () => {
   expect(f.calls.replies[0]).toContain("No new revision was published");
 });
 
+test("manual review follow-ups wait without spending another sandbox or coding run", async () => {
+  const f = fixture();
+  await f.invoke(event(), task());
+  const sandboxes = f.calls.sandbox, writes = f.calls.writes.length;
+  await f.invoke({ ...event(), eventId: "E2", text: "check the review" });
+  expect(f.calls.coding).toBe(1);
+  expect(f.calls.sandbox).toBe(sandboxes);
+  expect(f.calls.writes).toHaveLength(writes);
+  expect(f.calls.jobs.at(-1)?.expectedHead).toBe(head);
+  expect(f.calls.replies.at(-1)).toContain("still reviewing");
+  f.calls.reviewed = true;
+  const next = await f.invoke(f.calls.jobs.at(-1));
+  expect(f.calls.coding).toBe(2);
+  expect(next.task?.reviewRounds).toBe(1);
+});
+
+test("manual follow-ups cannot spend coding runs after the correction budget", async () => {
+  const f = fixture();
+  const first = await f.invoke(event(), task());
+  f.calls.reviewed = true;
+  await f.invoke({ ...event(), eventId: "E2", text: "check the review" }, { ...first.task!, reviewRounds: 2 });
+  expect(f.calls.coding).toBe(1);
+  expect(f.calls.replies.at(-1)).toContain("two correction rounds");
+});
+
 test("checkpoint resumes after publication without creating another PR", async () => {
   const f = fixture("publish", false, true);
   await expect(f.invoke(event(), task())).rejects.toThrow("Queue temporarily unavailable");

@@ -69,6 +69,11 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
         // A manual follow-up also gets available review context, but never
         // assumes that an old or missing review approved the current revision.
         const review = state.task?.prNumber ? await readReview(deps.github, state.task) : undefined;
+        if (state.task && review?.status === "pending") return { ...reset, request, review, route: "finish" as const,
+          task: { ...state.task, verification: undefined, reviewHead: undefined, awaitingReview: true },
+          scheduleReview: true, reply: `Greptile is still reviewing the current commit. I’ll check again before starting more coding. ${state.task.prUrl}` };
+        if (state.task && review && state.task.reviewRounds >= maxReviewRounds) return { ...reset, request, review, route: "finish" as const,
+          task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}. I will not merge it.` };
         return { ...reset, request, review, route: "work" as const,
           ...(state.task ? { task: { ...state.task, verification: undefined, reviewHead: review?.status === "reviewed" ? review.head : undefined } } : {}) };
       } catch (error) {
