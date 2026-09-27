@@ -9,6 +9,11 @@ export type PullRequest = {
   head: { sha: string; ref: string }; base: { ref: string };
 };
 export type Review = { id: number; body: string | null; state: string; commit_id: string; user: { login: string; type: string } };
+export type CheckRun = { name: string; head_sha: string; status: string; conclusion: string | null; app: { id: number } };
+export function greptileReviewComplete(checks: CheckRun[], head: string) {
+  const current = checks.filter(check => check.name === "Greptile Review" && check.app.id === 867647 && check.head_sha === head);
+  return current.length > 0 && current.every(check => check.status === "completed" && check.conclusion === "success");
+}
 export type ReviewComment = {
   id: number; body: string; html_url: string; path: string; line: number | null;
   commit_id: string; pull_request_review_id: number; user: { login: string; type: string };
@@ -100,10 +105,9 @@ export class GitHub {
   }
 
   async checkRuns(head: string) {
-    type Check = { name: string; status: string; conclusion: string | null; app: { id: number } };
-    const result: Check[] = [];
+    const result: CheckRun[] = [];
     for (let page = 1; page <= 10; page++) {
-      const data = await this.request<{ check_runs: Check[] }>(`/commits/${head}/check-runs?filter=latest&per_page=100&page=${page}`);
+      const data = await this.request<{ check_runs: CheckRun[] }>(`/commits/${head}/check-runs?filter=latest&per_page=100&page=${page}`);
       result.push(...data.check_runs);
       if (data.check_runs.length < 100) return result;
     }

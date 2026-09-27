@@ -1,5 +1,5 @@
 import { prBaseBranch, repository, required } from "./config";
-import { GitHub, isGreptile, type PullRequest, type Review } from "./github";
+import { GitHub, isGreptile, greptileReviewComplete, type PullRequest, type Review } from "./github";
 import { scopeFor, type AgentEvent } from "./policy";
 import type { Task } from "./state";
 
@@ -55,7 +55,9 @@ async function readyToAuthorize(github: GitHub, task: Task, pr: MergePR) {
   }
   const greptile = reviews.filter(review => isGreptile(review.user) && review.commit_id === pr.head.sha)
     .sort((a, b) => b.id - a.id)[0];
-  if (!greptile || !["COMMENTED", "APPROVED"].includes(greptile.state)) {
+  // A clean Greptile run can finish with a check and no formal review object.
+  // Only its authenticated app check on this exact commit is evidence of that.
+  if (!greptileReviewComplete(checks, pr.head.sha) || (greptile && !["COMMENTED", "APPROVED"].includes(greptile.state))) {
     throw new Error("Wait for Greptile's completed review of this exact commit.");
   }
   // Any unresolved change request still needs human attention, even if branch
@@ -67,7 +69,7 @@ async function readyToAuthorize(github: GitHub, task: Task, pr: MergePR) {
   if ([...latestReviews.values()].some(review => review.state === "CHANGES_REQUESTED")) throw new Error("A reviewer still requests changes.");
   const requiredChecks = [["check", 15368], ["pr-agent", 15368], ["Greptile Review", 867647]] as const;
   for (const [name, appId] of requiredChecks) {
-    const matches = checks.filter(check => check.name === name && check.app.id === appId);
+    const matches = checks.filter(check => check.name === name && check.app.id === appId && check.head_sha === pr.head.sha);
     if (!matches.length || matches.some(check => check.status !== "completed" || check.conclusion !== "success")) {
       throw new Error(`Wait for a successful ${name} check on this commit.`);
     }

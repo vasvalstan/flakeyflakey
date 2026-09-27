@@ -37,6 +37,7 @@ function fixture(action: Decision["action"] = "publish", failCheck = false, fail
     if (path === "/pulls/7") return Response.json(pr);
     if (path.includes("/reviews")) return Response.json(calls.reviewed ? [{ id: 1, body: "Please inspect the remaining issue", state: "COMMENTED", commit_id: head, user: { type: "Bot", login: "greptile-apps[bot]" } }] : []);
     if (path.includes("/comments")) return Response.json([]);
+    if (path.endsWith("/check-runs")) return Response.json({check_runs:[]});
     if (path.startsWith("/git/ref/")) return remote ? Response.json({ object: { sha: remote } }) : new Response(null, { status: 404 });
     throw new Error(`Unexpected path ${path}`);
   });

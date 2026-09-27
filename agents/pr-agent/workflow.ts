@@ -1,4 +1,4 @@
-import { GitHub, GitHubError, isGreptile, type PullRequest, type Review, type ReviewComment } from "./github";
+import { GitHub, GitHubError, isGreptile, greptileReviewComplete, type PullRequest, type Review, type ReviewComment } from "./github";
 import { maxReviewRounds, prBaseBranch, workspace } from "./config";
 import type { RunScope } from "./policy";
 import type { Task } from "./state";
@@ -108,13 +108,16 @@ export async function readReview(github: GitHub, task: Task) {
     github.list<ReviewComment>(`/pulls/${task.prNumber}/comments`),
     github.list<{ body: string; html_url: string; user: { login: string; type: string } }>(`/issues/${task.prNumber}/comments`),
   ]);
-  const current = reviews.filter(review => isGreptile(review.user) && review.commit_id === pr.head.sha && !["PENDING", "DISMISSED"].includes(review.state));
+  const currentReviews = reviews.filter(review => isGreptile(review.user) && review.commit_id === pr.head.sha);
+  const current = currentReviews.filter(review => !["PENDING", "DISMISSED"].includes(review.state));
+  // Greptile can complete a clean review without creating a formal review object.
+  const completedCheck = !currentReviews.length && greptileReviewComplete(await github.checkRuns(pr.head.sha), pr.head.sha);
   const findings = comments.filter(comment => isGreptile(comment.user)).map(comment => ({
     id: comment.id, body: comment.body, path: comment.path, line: comment.line, url: comment.html_url,
     onCurrentCommit: comment.commit_id === pr.head.sha,
   }));
   return {
-    status: current.length ? "reviewed" : "pending", head: pr.head.sha,
+    status: current.length || completedCheck ? "reviewed" : "pending", head: pr.head.sha, completedCheck,
     reviews: current.map(review => ({ id: review.id, body: review.body, state: review.state })), findings,
     // Summary comments lack a commit id: useful context, never evidence that the
     // current revision passed review. Older findings also require reinspection.

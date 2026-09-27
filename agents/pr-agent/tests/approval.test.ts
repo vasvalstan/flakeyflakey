@@ -25,7 +25,7 @@ function fixture() {
   const gate = { id:"PR7", isDraft:true, headRefOid:head, baseRefOid:base, mergeStateStatus:"CLEAN", reviewDecision:null as string|null,
     baseRef:{branchProtectionRule:{requiresStrictStatusChecks:true,isAdminEnforced:true,requiresConversationResolution:true,requiredStatusCheckContexts:["check","pr-agent"]}},
     reviewThreads:{pageInfo:{hasNextPage:false},nodes:[] as {isResolved:boolean}[]} };
-  const checks = [ ["check",15368], ["pr-agent",15368], ["Greptile Review",867647] ].map(([name,id])=>({name,status:"completed",conclusion:"success",app:{id}}));
+  const checks = [ ["check",15368], ["pr-agent",15368], ["Greptile Review",867647] ].map(([name,id])=>({name,head_sha:head,status:"completed",conclusion:"success",app:{id}}));
   const reviews = [{id:1,commit_id:head,state:"COMMENTED",body:"",user:{login:"greptile-apps[bot]",type:"Bot"}}];
   const statuses: {context:string;state:string}[] = [];
   const comments: {body:string}[] = [];
@@ -151,14 +151,14 @@ test("missing or weakened protection, unresolved or truncated discussions and in
 
 test("a current Greptile review and successful checks from the expected apps are mandatory", async () => {
   for(const change of [
-    (f:ReturnType<typeof fixture>)=>{f.reviews[0]!.commit_id=base;},
+    (f:ReturnType<typeof fixture>)=>{f.checks[2]!.head_sha=base;},
     (f:ReturnType<typeof fixture>)=>{f.reviews[0]!.state="PENDING";},
-    (f:ReturnType<typeof fixture>)=>{f.reviews[0]!.user.type="User";},
+    (f:ReturnType<typeof fixture>)=>{f.checks[2]!.app.id=1234;},
     (f:ReturnType<typeof fixture>)=>{f.checks.pop();},
     (f:ReturnType<typeof fixture>)=>{f.checks[0]!.app.id=1234;},
     (f:ReturnType<typeof fixture>)=>{f.checks[0]!.conclusion="skipped";},
     (f:ReturnType<typeof fixture>)=>{f.checks[0]!.status="in_progress";},
-    (f:ReturnType<typeof fixture>)=>{f.checks.push({name:"extra",app:{id:555},status:"completed",conclusion:"failure"});},
+    (f:ReturnType<typeof fixture>)=>{f.checks.push({name:"extra",head_sha:head,app:{id:555},status:"completed",conclusion:"failure"});},
     (f:ReturnType<typeof fixture>)=>{f.statuses.push({context:"preview",state:"pending"});},
     (f:ReturnType<typeof fixture>)=>{f.reviews.push({id:2,commit_id:base,state:"CHANGES_REQUESTED",body:"Fix this",user:{login:"reviewer",type:"User"}});},
   ]) {
@@ -166,6 +166,19 @@ test("a current Greptile review and successful checks from the expected apps are
     await expect(handleApproval(f.github,event(),task(),command())).rejects.toThrow();
     expect(f.writes).toHaveLength(0);
   }
+});
+
+test("a clean Greptile check permits authorization without a new formal review but unresolved threads still block it", async () => {
+  const f=fixture();f.reviews[0]!.commit_id=base;
+  f.gate.reviewThreads.nodes=[{isResolved:false}];
+  await expect(handleApproval(f.github,event(),task(),command())).rejects.toThrow("Resolve every review discussion");
+  expect(f.writes).toHaveLength(0);
+  f.gate.reviewThreads.nodes=[];
+  const approved=await handleApproval(f.github,event(),task(),command());
+  expect(approved.task.approval?.head).toBe(head);
+  f.checks[2]!.status="in_progress";
+  await expect(handleApproval(f.github,event("merge"),approved.task,command("merge"))).rejects.toThrow("Greptile");
+  expect(f.pr.merged).toBe(false);
 });
 
 test("merge rechecks CI and base after approval; head races are rejected by GitHub", async () => {

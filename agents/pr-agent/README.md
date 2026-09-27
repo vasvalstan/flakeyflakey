@@ -90,7 +90,7 @@ The receiver validates Slack's signature, timestamp, workspace, channel and ment
 
 In Slack app **A0C4MJW5X35**, enable Event Subscriptions and set the Request URL to the Railway receiver's HTTPS URL plus `/slack/events`. Confirm **Verified**, subscribe to **app_mention**, and save. Keep the bot invited to channel `C0C4AMGJEA3`.
 
-Greptile is installed for `vasvalstan/flakeyflakey`; the repository must also be enabled in its dashboard. Publication sends its documented `@greptileai review this draft` request for each commit. Only the exact configured Greptile bot logins and reviews of the current commit are accepted. No Greptile API key is needed.
+Greptile is installed for `vasvalstan/flakeyflakey`; the repository must also be enabled in its dashboard. Publication sends its documented `@greptileai review this draft` request for each commit. Review polling accepts a formal review from the configured bot on the current commit, or a completed successful `Greptile Review` check from the verified Greptile app on that exact commit. Clean reviews can report completion through the check without a new formal review. Approval and merging always require that successful check plus all other gates. Summary text alone is never completion evidence. No Greptile API key is needed.
 
 ### Temporary Railway previews
 

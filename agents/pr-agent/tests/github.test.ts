@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GitHub, isGreptile } from "../github";
+import { GitHub, isGreptile, type CheckRun } from "../github";
 import { readReview } from "../workflow";
 import type { Task } from "../state";
 
@@ -41,10 +41,11 @@ test("bot matching is exact and does not trust a human's name", () => {
   expect(isGreptile({ ...bot, login: "fake-greptile-apps[bot]" })).toBe(false);
 });
 
-function reviewClient(reviewHead: string) {
+function reviewClient(reviewHead: string, checks: CheckRun[] = []) {
   return new GitHub(() => Promise.resolve("test"), async url => {
     if (url.includes("/reviews?")) return Response.json([{ id: 1, user: bot, commit_id: reviewHead, state: "COMMENTED", body: "Finding" }]);
     if (url.includes("/comments?")) return Response.json([]);
+    if (url.includes("/check-runs?")) return Response.json({check_runs:checks});
     return Response.json({ number: 12, state: "open", head: { sha: task.parentSha, ref: task.branch } });
   });
 }
@@ -55,9 +56,20 @@ test("a review on an older commit never counts as review of the new code", async
 });
 
 test("empty Greptile results mean pending, not approved", async () => {
-  const client = new GitHub(() => Promise.resolve("test"), async url => url.includes("?")
+  const client = new GitHub(() => Promise.resolve("test"), async url => url.includes("/check-runs?")
+    ? Response.json({check_runs:[]}) : url.includes("?")
     ? Response.json([]) : Response.json({ state: "open", head: { sha: task.parentSha, ref: task.branch } }));
   expect((await readReview(client, task)).status).toBe("pending");
+});
+
+test("a successful check from Greptile on the exact commit completes a review with no new comments", async () => {
+  const check: CheckRun = {name:"Greptile Review",head_sha:task.parentSha,status:"completed",conclusion:"success",app:{id:867647}};
+  expect((await readReview(reviewClient("old-commit",[check]),task)).status).toBe("reviewed");
+  for(const invalid of [
+    {...check,head_sha:"old-commit"}, {...check,app:{id:123}}, {...check,status:"in_progress"},
+    {...check,conclusion:"failure"}, {...check,conclusion:"skipped"}, {...check,name:"Pretend Greptile Review"},
+  ]) expect((await readReview(reviewClient("old-commit",[invalid]),task)).status).toBe("pending");
+  expect((await readReview(reviewClient("old-commit",[check,{...check,status:"in_progress"}]),task)).status).toBe("pending");
 });
 
 test("GitHub pagination reads subsequent pages", async () => {
