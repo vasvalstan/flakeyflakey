@@ -5,7 +5,7 @@ export class GitHubError extends Error {
   constructor(public status: number) { super(`GitHub request failed (HTTP ${status}). Check repository access or rate limits.`); }
 }
 export type PullRequest = {
-  number: number; html_url: string; state: string; merged_at: string | null;
+  number: number; html_url: string; state: string; merged_at: string | null; body?: string | null;
   head: { sha: string; ref: string }; base: { ref: string };
 };
 export type Review = { id: number; body: string | null; state: string; commit_id: string; user: { login: string; type: string } };

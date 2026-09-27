@@ -116,15 +116,21 @@ export async function readReview(github: GitHub, task: Task) {
     id: comment.id, body: comment.body, path: comment.path, line: comment.line, url: comment.html_url,
     onCurrentCommit: comment.commit_id === pr.head.sha,
   }));
+  const summaries = issueComments.filter(comment => isGreptile(comment.user)).map(({body,html_url})=>({body,url:html_url}));
+  const summaryStart = pr.body?.indexOf("<!-- greptile_comment -->") ?? -1;
+  if (summaryStart >= 0) summaries.push({body:pr.body!.slice(summaryStart),url:pr.html_url});
   const gate = completedCheck ? await github.mergeGate(task.prNumber) : undefined;
   const clean = !!gate && gate.headRefOid === pr.head.sha && !gate.reviewThreads.pageInfo.hasNextPage &&
-    gate.reviewThreads.nodes.every(thread => thread.isResolved) && !findings.some(finding => finding.onCurrentCommit);
+    gate.reviewThreads.nodes.every(thread => thread.isResolved) && !findings.some(finding => finding.onCurrentCommit) &&
+    summaries.length === 0;
   return {
     status: current.length || completedCheck ? "reviewed" : "pending", head: pr.head.sha, completedCheck, clean,
     reviews: current.map(review => ({ id: review.id, body: review.body, state: review.state })), findings,
     // Summary comments lack a commit id: useful context, never evidence that the
     // current revision passed review. Older findings also require reinspection.
-    summaries: issueComments.filter(comment => isGreptile(comment.user)).slice(-3).map(({ body, html_url }) => ({ body, url: html_url })),
+    // Even summary-only feedback needs assessment. Do not classify free-form
+    // summary text as clean or silently omit earlier bot summary comments.
+    summaries,
     correctionRoundsRemaining: maxReviewRounds - task.reviewRounds,
   };
 }

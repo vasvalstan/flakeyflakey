@@ -19,7 +19,7 @@ const parent = "a".repeat(40), base = "b".repeat(40), tree = "c".repeat(40), hea
 const task = (): Task => ({ ...scopeFor(event()), baseBranch: "develop", parentSha: parent, parentTree: base, localBase: base, reviewRounds: 0 });
 
 function fixture(action: Decision["action"] = "publish", failCheck = false, failEnqueue = false) {
-  const calls = { coding: 0, sandbox: 0, reviewed: false, checkReviewed: false, unresolved: false, writes: [] as any[], commands: [] as string[], replies: [] as string[], jobs: [] as AgentEvent[] };
+  const calls = { coding: 0, sandbox: 0, reviewed: false, checkReviewed: false, unresolved: false, summary: "", writes: [] as any[], commands: [] as string[], replies: [] as string[], jobs: [] as AgentEvent[] };
   let remote: string | undefined;
   let pr: any;
   const github = new GitHub(async () => "test-token", async (url, init) => {
@@ -37,7 +37,7 @@ function fixture(action: Decision["action"] = "publish", failCheck = false, fail
     if (path === "/pulls") return Response.json(pr ? [pr] : []);
     if (path === "/pulls/7") return Response.json(pr);
     if (path.includes("/reviews")) return Response.json(calls.reviewed ? [{ id: 1, body: "Please inspect the remaining issue", state: "COMMENTED", commit_id: head, user: { type: "Bot", login: "greptile-apps[bot]" } }] : []);
-    if (path.includes("/comments")) return Response.json([]);
+    if (path.includes("/comments")) return Response.json(path.startsWith("/issues/")&&calls.summary?[{body:calls.summary,html_url:"https://github.com/vasvalstan/flakeyflakey/pull/7#issuecomment-1",user:{login:"greptile-apps[bot]",type:"Bot"}}]:[]);
     if (path.endsWith("/check-runs")) return Response.json({check_runs:calls.checkReviewed?[{name:"Greptile Review",head_sha:head,status:"completed",conclusion:"success",app:{id:867647}}]:[]});
     if (path.startsWith("/git/ref/")) return remote ? Response.json({ object: { sha: remote } }) : new Response(null, { status: 404 });
     throw new Error(`Unexpected path ${path}`);
@@ -107,6 +107,15 @@ test("a completed check does not skip unresolved review discussions", async () =
   const result=await f.invoke(f.calls.jobs[0]);
   expect(f.calls.coding).toBe(2);
   expect(result.task?.reviewRounds).toBe(1);
+});
+
+test("summary-only feedback reaches correction instead of being announced as clean", async () => {
+  const f=fixture();await f.invoke(event(),task());
+  f.calls.checkReviewed=true;f.calls.summary="Fix the missing validation before merging.";
+  const result=await f.invoke(f.calls.jobs[0]);
+  expect(f.calls.coding).toBe(2);
+  expect(result.review).toMatchObject({clean:false,summaries:[{body:f.calls.summary}]});
+  expect(f.calls.replies.some(reply=>reply.includes("without new findings"))).toBe(false);
 });
 
 test("an ordinary change request starting with merge still reaches coding", async () => {

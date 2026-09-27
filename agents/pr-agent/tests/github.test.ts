@@ -41,13 +41,13 @@ test("bot matching is exact and does not trust a human's name", () => {
   expect(isGreptile({ ...bot, login: "fake-greptile-apps[bot]" })).toBe(false);
 });
 
-function reviewClient(reviewHead: string, checks: CheckRun[] = []) {
+function reviewClient(reviewHead: string, checks: CheckRun[] = [], description?: string) {
   return new GitHub(() => Promise.resolve("test"), async url => {
     if (url.endsWith("/graphql")) return Response.json({data:{repository:{pullRequest:{headRefOid:task.parentSha,reviewThreads:{pageInfo:{hasNextPage:false},nodes:[]}}}}});
     if (url.includes("/reviews?")) return Response.json([{ id: 1, user: bot, commit_id: reviewHead, state: "COMMENTED", body: "Finding" }]);
     if (url.includes("/comments?")) return Response.json([]);
     if (url.includes("/check-runs?")) return Response.json({check_runs:checks});
-    return Response.json({ number: 12, state: "open", head: { sha: task.parentSha, ref: task.branch } });
+    return Response.json({ number: 12, state: "open", body:description, html_url:"https://github.com/vasvalstan/flakeyflakey/pull/12", head: { sha: task.parentSha, ref: task.branch } });
   });
 }
 
@@ -73,6 +73,16 @@ test("a successful check from Greptile on the exact commit completes a review wi
     {...check,conclusion:"failure"}, {...check,conclusion:"skipped"}, {...check,name:"Pretend Greptile Review"},
   ]) expect((await readReview(reviewClient("old-commit",[invalid]),task)).status).toBe("pending");
   expect((await readReview(reviewClient("old-commit",[check,{...check,status:"in_progress"}]),task)).status).toBe("pending");
+});
+
+test("Greptile feedback in the PR description is supplied for assessment and prevents a clean shortcut", async () => {
+  const description="Setup description\n<!-- greptile_comment -->\nFix the missing validation.";
+  const check: CheckRun = {name:"Greptile Review",head_sha:task.parentSha,status:"completed",conclusion:"success",app:{id:867647}};
+  const result=await readReview(reviewClient("old-commit",[check],description),task);
+  expect(result.status).toBe("reviewed");
+  expect(result.clean).toBe(false);
+  expect(result.summaries).toHaveLength(1);
+  expect(result.summaries[0]!.body).toContain("Fix the missing validation");
 });
 
 test("GitHub pagination reads subsequent pages", async () => {
