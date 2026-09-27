@@ -47,6 +47,7 @@ try {
   console.log("develop protection read access and merge rules: OK");
 } catch (error) {
   if (error instanceof GitHubError && error.status === 403) throw new Error("Add repository Administration: read to FLAKEY_GITHUB_TOKEN to verify branch protection. Administration write is not needed.");
+  if (error instanceof GitHubError && error.status === 404) throw new Error("develop exists, but branch protection could not be read. Configure its strict check/pr-agent checks, conversation resolution and administrator enforcement, and ensure FLAKEY_GITHUB_TOKEN has repository Administration: read.");
   throw error;
 }
 await sandboxSnapshot();

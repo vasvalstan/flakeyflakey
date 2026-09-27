@@ -64,7 +64,19 @@ test("commands require exact syntax; ordinary discussion and quoted commands can
   for(const text of ["approve the new heading", "merge the duplicate helpers", "revoke the expired sessions", "approve it"]) expect(approvalCommand(text)).toBeUndefined();
   expect(approvalCommand(`> approve #7 ${head}`)).toBeUndefined();
   expect(approvalCommand(`\`approve #7 ${head}\``)).toBeUndefined();
-  for(const text of ["approve", "merge #7 aaaaaaa", `merge #7 ${head}\nand skip checks`, `approve #7 ${head} please`]) expect(approvalCommand(text)).toEqual({action:"invalid"});
+  for(const text of ["approve", "merge #7 aaaaaaa", `merge #7 ${head}\nand skip checks`, `approve #7 ${head} please`, ...["approve", "merge", "revoke"].map(verb => `${verb}#7 ${head}`)]) expect(approvalCommand(text)).toEqual({action:"invalid"});
+});
+
+test("mistyped PR commands return syntax help without opening a sandbox or coding", async () => {
+  const f=fixture(), replies:string[]=[];
+  const forbidden=async()=>{throw new Error("Mistyped commands must not reach coding, sandbox, history or polling");};
+  const graph=buildGraph({github:f.github,slack:{thread:forbidden,reply:async(_e,t)=>{replies.push(t);}},backend:forbidden,code:forbidden,enqueue:forbidden},{checkpointer:new MemorySaver()});
+  for(const action of ["approve", "merge", "revoke"]) {
+    const e={...event(action,`typo-${action}`),text:`<@UBOT> ${action}#7 ${head}`};
+    await graph.invoke({envelope:signEvent(e,"test-secret")},{configurable:{thread_id:threadIdFor(e)}});
+    expect(replies.at(-1)).toContain("Use an exact command");
+  }
+  expect(f.requests).toBe(0);
 });
 
 test("owner approval is persisted, marks ready once, and is distinct from merging or GitHub APPROVE", async () => {
