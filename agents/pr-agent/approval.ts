@@ -6,7 +6,9 @@ import type { Task } from "./state";
 type Command = { action: "approve" | "merge" | "revoke"; number: number; head: string } | { action: "invalid" };
 export function approvalCommand(text: string): Command | undefined {
   const plain = text.trim().replace(/^<@[A-Z0-9]+>\s*/, "");
-  if (!/^(approve|merge|revoke)\b/i.test(plain)) return;
+  // Reserve the documented #PR command prefix, not ordinary coding requests
+  // such as "merge the duplicate helpers" or "revoke an expired session".
+  if (!/^(approve|merge|revoke)(?:\s+#|$)/i.test(plain)) return;
   const match = /^(approve|merge|revoke) #([1-9]\d*) ([a-f0-9]{40})$/i.exec(plain);
   if (!match || !Number.isSafeInteger(Number(match[2]))) return { action: "invalid" };
   return { action: match[1]!.toLowerCase() as "approve" | "merge" | "revoke", number: Number(match[2]), head: match[3]!.toLowerCase() };

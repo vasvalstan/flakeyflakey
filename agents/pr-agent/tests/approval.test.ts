@@ -61,9 +61,10 @@ function fixture() {
 test("commands require exact syntax; ordinary discussion and quoted commands cannot authorize", () => {
   expect(approvalCommand(event().text)).toEqual({action:"approve",number:7,head});
   expect(approvalCommand("We can approve it now")).toBeUndefined();
+  for(const text of ["approve the new heading", "merge the duplicate helpers", "revoke the expired sessions", "approve it"]) expect(approvalCommand(text)).toBeUndefined();
   expect(approvalCommand(`> approve #7 ${head}`)).toBeUndefined();
   expect(approvalCommand(`\`approve #7 ${head}\``)).toBeUndefined();
-  for(const text of ["approve it", "merge #7 aaaaaaa", `merge #7 ${head}\nand skip checks`, `approve #7 ${head} please`]) expect(approvalCommand(text)).toEqual({action:"invalid"});
+  for(const text of ["approve", "merge #7 aaaaaaa", `merge #7 ${head}\nand skip checks`, `approve #7 ${head} please`]) expect(approvalCommand(text)).toEqual({action:"invalid"});
 });
 
 test("owner approval is persisted, marks ready once, and is distinct from merging or GitHub APPROVE", async () => {

@@ -83,6 +83,13 @@ test("failed verification cannot reach GitHub publication", async () => {
   expect(f.calls.replies[0]).toContain("No new revision was published");
 });
 
+test("an ordinary change request starting with merge still reaches coding", async () => {
+  const f = fixture();
+  await f.invoke({ ...event(), text: "<@UBOT> merge the duplicate helper functions" }, task());
+  expect(f.calls.coding).toBe(1);
+  expect(f.calls.writes.some(write => write.path.endsWith("/merge"))).toBe(false);
+});
+
 test("manual review follow-ups wait without spending another sandbox or coding run", async () => {
   const f = fixture();
   await f.invoke(event(), task());
