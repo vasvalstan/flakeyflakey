@@ -19,10 +19,11 @@ const parent = "a".repeat(40), base = "b".repeat(40), tree = "c".repeat(40), hea
 const task = (): Task => ({ ...scopeFor(event()), baseBranch: "develop", parentSha: parent, parentTree: base, localBase: base, reviewRounds: 0 });
 
 function fixture(action: Decision["action"] = "publish", failCheck = false, failEnqueue = false) {
-  const calls = { coding: 0, sandbox: 0, reviewed: false, writes: [] as any[], commands: [] as string[], replies: [] as string[], jobs: [] as AgentEvent[] };
+  const calls = { coding: 0, sandbox: 0, reviewed: false, checkReviewed: false, unresolved: false, writes: [] as any[], commands: [] as string[], replies: [] as string[], jobs: [] as AgentEvent[] };
   let remote: string | undefined;
   let pr: any;
   const github = new GitHub(async () => "test-token", async (url, init) => {
+    if (url.endsWith("/graphql")) return Response.json({data:{repository:{pullRequest:{headRefOid:head,reviewThreads:{pageInfo:{hasNextPage:false},nodes:calls.unresolved?[{isResolved:false}]:[]}}}}});
     const path = new URL(url).pathname.replace("/repos/vasvalstan/flakeyflakey", "");
     if (init?.method !== "GET") {
       const body = JSON.parse(String(init?.body)); calls.writes.push({ path, body });
@@ -37,7 +38,7 @@ function fixture(action: Decision["action"] = "publish", failCheck = false, fail
     if (path === "/pulls/7") return Response.json(pr);
     if (path.includes("/reviews")) return Response.json(calls.reviewed ? [{ id: 1, body: "Please inspect the remaining issue", state: "COMMENTED", commit_id: head, user: { type: "Bot", login: "greptile-apps[bot]" } }] : []);
     if (path.includes("/comments")) return Response.json([]);
-    if (path.endsWith("/check-runs")) return Response.json({check_runs:[]});
+    if (path.endsWith("/check-runs")) return Response.json({check_runs:calls.checkReviewed?[{name:"Greptile Review",head_sha:head,status:"completed",conclusion:"success",app:{id:867647}}]:[]});
     if (path.startsWith("/git/ref/")) return remote ? Response.json({ object: { sha: remote } }) : new Response(null, { status: 404 });
     throw new Error(`Unexpected path ${path}`);
   });
@@ -82,6 +83,30 @@ test("failed verification cannot reach GitHub publication", async () => {
   expect(f.calls.writes).toHaveLength(0);
   expect(f.calls.jobs).toHaveLength(0);
   expect(f.calls.replies[0]).toContain("No new revision was published");
+});
+
+test("a clean Greptile check finishes polling without another model, sandbox or correction round", async () => {
+  const f=fixture();
+  const first=await f.invoke(event(),task());
+  const boxes=f.calls.sandbox, writes=f.calls.writes.length, jobs=f.calls.jobs.length;
+  f.calls.checkReviewed=true;
+  const result=await f.invoke(f.calls.jobs[0]);
+  expect(f.calls.coding).toBe(1);
+  expect(f.calls.sandbox).toBe(boxes);
+  expect(f.calls.writes).toHaveLength(writes);
+  expect(f.calls.jobs).toHaveLength(jobs);
+  expect(result.task?.reviewRounds).toBe(first.task?.reviewRounds);
+  expect(result.task?.awaitingReview).toBe(false);
+  expect(f.calls.replies.at(-1)).toContain("without new findings");
+});
+
+test("a completed check does not skip unresolved review discussions", async () => {
+  const f=fixture();
+  await f.invoke(event(),task());
+  f.calls.checkReviewed=true; f.calls.unresolved=true;
+  const result=await f.invoke(f.calls.jobs[0]);
+  expect(f.calls.coding).toBe(2);
+  expect(result.task?.reviewRounds).toBe(1);
 });
 
 test("an ordinary change request starting with merge still reaches coding", async () => {

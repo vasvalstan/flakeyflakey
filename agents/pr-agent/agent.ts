@@ -72,6 +72,9 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
           if (review.status === "pending") return { ...reset, route: "finish" as const,
             scheduleReview: event.attempt < 10,
             reply: event.attempt >= 10 ? `Greptile has not submitted a review for the current commit yet. ${state.task.prUrl}\nMention me with “check the review” to retry. Check that Greptile reviews draft PRs.` : "" };
+          if (review.clean) return { ...reset, route: "finish" as const, review,
+            task: { ...state.task, reviewHead: review.head, awaitingReview: false },
+            reply: `Greptile completed its review without new findings, and all review discussions are resolved. Test the preview and inspect ${state.task.prUrl}.\n${approvalHelp(state.task)}` };
           if (state.task.reviewRounds >= maxReviewRounds) return { ...reset, route: "finish" as const,
             task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}.\n${approvalHelp(state.task)}` };
           return { ...reset, review, task: { ...state.task, reviewHead: review.head, awaitingReview: false }, route: "work" as const };

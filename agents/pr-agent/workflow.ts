@@ -116,8 +116,11 @@ export async function readReview(github: GitHub, task: Task) {
     id: comment.id, body: comment.body, path: comment.path, line: comment.line, url: comment.html_url,
     onCurrentCommit: comment.commit_id === pr.head.sha,
   }));
+  const gate = completedCheck ? await github.mergeGate(task.prNumber) : undefined;
+  const clean = !!gate && gate.headRefOid === pr.head.sha && !gate.reviewThreads.pageInfo.hasNextPage &&
+    gate.reviewThreads.nodes.every(thread => thread.isResolved) && !findings.some(finding => finding.onCurrentCommit);
   return {
-    status: current.length || completedCheck ? "reviewed" : "pending", head: pr.head.sha, completedCheck,
+    status: current.length || completedCheck ? "reviewed" : "pending", head: pr.head.sha, completedCheck, clean,
     reviews: current.map(review => ({ id: review.id, body: review.body, state: review.state })), findings,
     // Summary comments lack a commit id: useful context, never evidence that the
     // current revision passed review. Older findings also require reinspection.

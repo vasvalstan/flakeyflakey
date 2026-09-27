@@ -43,6 +43,7 @@ test("bot matching is exact and does not trust a human's name", () => {
 
 function reviewClient(reviewHead: string, checks: CheckRun[] = []) {
   return new GitHub(() => Promise.resolve("test"), async url => {
+    if (url.endsWith("/graphql")) return Response.json({data:{repository:{pullRequest:{headRefOid:task.parentSha,reviewThreads:{pageInfo:{hasNextPage:false},nodes:[]}}}}});
     if (url.includes("/reviews?")) return Response.json([{ id: 1, user: bot, commit_id: reviewHead, state: "COMMENTED", body: "Finding" }]);
     if (url.includes("/comments?")) return Response.json([]);
     if (url.includes("/check-runs?")) return Response.json({check_runs:checks});
@@ -64,7 +65,9 @@ test("empty Greptile results mean pending, not approved", async () => {
 
 test("a successful check from Greptile on the exact commit completes a review with no new comments", async () => {
   const check: CheckRun = {name:"Greptile Review",head_sha:task.parentSha,status:"completed",conclusion:"success",app:{id:867647}};
-  expect((await readReview(reviewClient("old-commit",[check]),task)).status).toBe("reviewed");
+  const result=await readReview(reviewClient("old-commit",[check]),task);
+  expect(result.status).toBe("reviewed");
+  expect(result.clean).toBe(true);
   for(const invalid of [
     {...check,head_sha:"old-commit"}, {...check,app:{id:123}}, {...check,status:"in_progress"},
     {...check,conclusion:"failure"}, {...check,conclusion:"skipped"}, {...check,name:"Pretend Greptile Review"},
