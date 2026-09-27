@@ -16,7 +16,7 @@ const change = (): Change[] => [{ path: "src/example.ts", mode: "100644", conten
 
 function sandbox(changes = change(), failure?: string): Backend {
   return {
-    execute: async command => ({ output: command.includes("rev-parse") ? tree : command.includes("git show")
+    execute: async command => ({ output: command.includes("rev-parse") || command.includes("write-tree") ? tree : command.includes("git show")
       ? JSON.stringify({ scripts: { "test:e2e": "playwright test", "test:soak": "bun scripts/soak-studio.ts" } }) : "done",
       exitCode: failure && command.includes(failure) ? 1 : 0 }),
     uploadFiles: async () => [{ }],
@@ -133,6 +133,15 @@ test("concurrent edits on the remote branch are not overwritten", async () => {
   current.verification = { digest: digestChanges(change()), logs: [] };
   await expect(publish(client, sandbox(), scope, current, "Fix", "Summary")).rejects.toThrow("Remote branch changed");
   expect(writes.filter(write => write.path.includes("/git/refs"))).toHaveLength(0);
+});
+
+test("a staged tree mismatch stops before creating a commit, updating a branch or publishing a PR", async () => {
+  const {client,writes}=github(),backend=sandbox(),current=task();
+  current.verification={digest:digestChanges(change()),logs:[]};
+  const run=backend.execute;
+  backend.execute=async command=>command.includes("write-tree")?{output:"f".repeat(40),exitCode:0}:run(command);
+  await expect(publish(client,backend,scope,current,"Fix","Summary")).rejects.toThrow("Local files changed while staging");
+  expect(writes.every(write=>["/git/blobs","/git/trees"].includes(write.path))).toBe(true);
 });
 
 test("third automated correction is refused", async () => {

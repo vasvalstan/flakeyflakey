@@ -112,6 +112,8 @@ The current GitHub application baseline has no separate `test:e2e` or `test:soak
 
 The coding sandbox has Bun, Git and Chromium, runs as `pwuser`, and receives no OpenAI, Slack, GitHub or LangSmith credentials. Outbound HTTPS is restricted to npm registries. Publication rejects secrets, workflow edits, agent self-modification, path traversal and verification-script changes. Diffs are limited to 80 regular files and 3 MB; repository archives to 30 MB. Concurrent external branch changes cause the agent to stop.
 
+Untracked dependency, build and test output is excluded from export even if the repository has no `.gitignore`. Tracked changes are still captured, and the file and byte limits still apply to the proposed source changes. The local checkpoint stages only the verified paths using literal path matching; its tree must match the proposed GitHub tree before any branch or PR update.
+
 The Actions job is limited to 120 minutes, each coding invocation to 20 minutes, and shell commands to 10 minutes. Sandboxes idle-stop after 30 minutes and are deleted a day after stopping. A later run reconstructs an expired sandbox from the published branch. Unpublished sandbox edits are not permanent.
 
 Railway compute, Actions usage beyond applicable allowances, model tokens, sandbox compute and tracing can still cost money. Removing LangSmith Deployments removes that hosting dependency; it does not make all execution free. EU tracing/sandboxes do not imply EU processing for GitHub runners or OpenAI.
