@@ -15,8 +15,7 @@ try {
   if (!previous.processed?.includes(event.eventId)) await defaultDependencies.slack.reply(event,
     `${approvalCommand(event.text) ? "I’m checking your PR command." : "I’m starting the task against develop."} Follow the run: ${runUrl}`);
   const state = await runAction(event, defaultDependencies, { statePath, stateKey,
-    signingSecret: required("SLACK_SIGNING_SECRET"), sleep: ms => Bun.sleep(ms),
-    retryFailedEvent: process.env.GITHUB_EVENT_NAME === "workflow_dispatch" });
+    signingSecret: required("SLACK_SIGNING_SECRET"), sleep: ms => Bun.sleep(ms) });
   const status = state.diagnostic ? `Stopped at ${state.diagnostic.stage}. Details are in the private EU trace.`
     : state.task?.merged ? "PR merged into develop following explicit Slack authorization." : "Agent run completed. Merging requires explicit human authorization.";
   console.log(status);
