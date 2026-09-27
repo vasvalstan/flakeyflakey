@@ -39,9 +39,10 @@ export async function previousArtifact(github: GitHub, key: string, defaultBranc
   const name = `flakey-state-${key}`;
   const page = await github.request<{ artifacts: Artifact[] }>(`/actions/artifacts?name=${name}&per_page=100`);
   for (const artifact of page.artifacts.sort((a, b) => b.id - a.id)) {
-    if (artifact.name !== name || artifact.expired || !artifact.workflow_run || artifact.workflow_run.head_branch !== defaultBranch) continue;
+    if (artifact.name !== name || !artifact.workflow_run || artifact.workflow_run.head_branch !== defaultBranch) continue;
     const run = await github.request<{ path: string; event: string; head_branch: string; repository: { id: number }; head_repository: { id: number } }>(`/actions/runs/${artifact.workflow_run.id}`);
     if (run.path !== `.github/workflows/${agentWorkflow}` || !["workflow_dispatch", "repository_dispatch"].includes(run.event) || run.head_branch !== defaultBranch || run.repository.id !== run.head_repository.id) continue;
+    if (artifact.expired) throw new Error("Latest task state expired. Stop rather than restoring an older revision.");
     if (artifact.size_in_bytes > 6_000_000) throw new Error("Saved task artifact exceeds its size limit.");
     return artifact;
   }

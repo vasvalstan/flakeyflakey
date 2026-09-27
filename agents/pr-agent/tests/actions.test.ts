@@ -56,6 +56,24 @@ test("state lookup ignores artifacts from PR checks and other workflows", async 
   expect((await previousArtifact(github, key, "main"))?.id).toBe(2);
 });
 
+test("expired latest state cannot roll back to an older artifact", async () => {
+  const github = new GitHub(async () => "read-token", async url => {
+    if (url.includes("/artifacts?")) return Response.json({ artifacts: [
+      { id: 3, name: `flakey-state-${key}`, expired: true, size_in_bytes: 100, workflow_run: { id: 30, head_branch: "main" } },
+      { id: 2, name: `flakey-state-${key}`, expired: false, size_in_bytes: 100, workflow_run: { id: 20, head_branch: "main" } },
+    ] });
+    return Response.json({ path: ".github/workflows/flakey-patch.yml", event: "repository_dispatch", head_branch: "main", repository: { id: 1 }, head_repository: { id: 1 } });
+  });
+  await expect(previousArtifact(github, key, "main")).rejects.toThrow("Latest task state expired");
+});
+
+test("oversized UTF-8 Slack requests never dispatch a job that cannot decrypt its input", async () => {
+  let requests = 0;
+  const github = new GitHub(async () => "token", async () => { requests++; return new Response(null, { status: 204 }); });
+  await expect(enqueue({ ...event, text: "界".repeat(20_000) }, github)).rejects.toThrow("dispatch limit");
+  expect(requests).toBe(0);
+});
+
 test("a separate Actions process restores encrypted state and deduplicates Slack retries", async () => {
   const dir = await mkdtemp(join(tmpdir(), "flakey-actions-"));
   try {

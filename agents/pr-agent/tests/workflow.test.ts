@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { GitHub } from "../github";
-import { publish, prepare } from "../workflow";
+import { publish, prepare, requestDraftReview } from "../workflow";
 import { verify, capture, digestChanges, type Backend } from "../workspace";
 import type { Change, Task } from "../state";
 import type { RunScope } from "../policy";
@@ -38,6 +38,7 @@ function github(options: { existingPr?: boolean; remote?: string; remoteTree?: s
       return Response.json({});
     }
     if (path === "/pulls") return Response.json(options.existingPr ? [{ number: 7, state: "open", html_url: "https://github.com/vasvalstan/flakeyflakey/pull/7" }] : []);
+    if (path === "/issues/7/comments") return Response.json([]);
     if (path.startsWith("/git/ref/heads/")) return options.remote
       ? Response.json({ object: { sha: options.remote } }) : new Response(null, { status: 404 });
     if (path.startsWith("/git/commits/")) return Response.json({ sha: options.remote, tree: { sha: options.remoteTree } });
@@ -101,6 +102,20 @@ test("publish creates a draft tied to Slack and reports actual test commands", a
   expect(next.parentSha).toBe(head);
   expect(next.verification).toBeUndefined();
   expect(next.awaitingReview).toBe(true);
+  expect(writes.find(write => write.path === "/issues/7/comments")?.body.body).toContain("@greptileai review this draft");
+});
+
+test("retrying a draft review request does not post twice for the same commit", async () => {
+  const comments: { body: string }[] = [];
+  const client = new GitHub(async () => "test", async (_url, init) => {
+    if (init?.method === "POST") { comments.push(JSON.parse(String(init.body))); return Response.json({}); }
+    return Response.json(comments);
+  });
+  await requestDraftReview(client, 7, head);
+  await requestDraftReview(client, 7, head);
+  expect(comments).toHaveLength(1);
+  await requestDraftReview(client, 7, parent);
+  expect(comments).toHaveLength(2);
 });
 
 test("a retry after publishing the same tree reuses the PR and commit", async () => {

@@ -77,6 +77,7 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
       if (!pr || pr.state !== "open") throw error;
     }
   } else await github.request(`/pulls/${pr.number}`, "PATCH", { title, body });
+  await requestDraftReview(github, pr.number, head);
   const next: Task = { ...task, parentSha: head, parentTree: tree.sha, prNumber: pr.number, prUrl: pr.html_url,
     reviewRounds: task.reviewRounds + (task.reviewHead ? 1 : 0), reviewHead: undefined,
     verification: undefined, awaitingReview: true };
@@ -86,6 +87,16 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
   next.localBase = await execute(backend, `cd ${workspace} && git rev-parse 'HEAD^{tree}'`);
   if (next.localBase !== tree.sha) throw new Error("Local files changed while publishing. Stop and reconcile the published PR.");
   return next;
+}
+
+export async function requestDraftReview(github: GitHub, prNumber: number, head: string) {
+  if (!/^[a-f0-9]{40}$/.test(head)) throw new Error("Expected a pinned review commit.");
+  const marker = `<!-- flakey-review:${head} -->`;
+  const comments = await github.list<{ body: string }>(`/issues/${prNumber}/comments`);
+  if (comments.some(comment => comment.body.includes(marker))) return;
+  await github.request(`/issues/${prNumber}/comments`, "POST", {
+    body: `@greptileai review this draft. The current commit is \`${head}\`.\n\n${marker}`,
+  });
 }
 
 export async function readReview(github: GitHub, task: Task) {
