@@ -22,13 +22,29 @@ flowchart LR
 3. It opens a **draft PR into develop**, with test evidence and a link to the source Slack thread. GitHub runs independent checks. Flakey Patch posts an explicit `@greptileai` review request once per published commit, so draft PRs can be reviewed too.
 4. The agent checks for a review of the current commit once a minute for up to ten minutes. It can publish at most **two correction revisions** for valid findings. Each revision runs verification again.
 5. Open the PR, inspect the changes and Greptile findings, and test the temporary Railway preview linked on the PR. Each preview builds the app's Docker images in its own environment. Railway removes the preview when the PR is merged or closed. A sandbox check alone is not a browser preview; wait for the Railway deployment to be healthy before testing.
-6. Mark the PR **Ready for review**. Once the current commit's checks pass and review findings are addressed, merge it into **develop** in GitHub. The bot never merges. Promotion from develop to main/production is a separate decision.
+6. Once the current commit's checks pass and findings are addressed, merge into **develop** in GitHub or use the explicit Slack commands below. Greptile alone never triggers a merge. Promotion from develop to main/production is a separate decision.
 
 Example first request:
 
 > @Flakey Patch change the application's main heading from “Know if you can ship. Know exactly why.” to “Ship with confidence. See the evidence.” Keep the layout and other text unchanged. Update a relevant test if one exists, and open a draft PR into develop.
 
 Use the actual heading visible in the app if it differs. Follow-ups in the same Slack thread reuse the same branch and PR. After a PR is closed or merged, start a new thread. If Greptile is late, mention the bot with “check the review”.
+
+### Approve and merge from Slack
+
+Only the configured Slack owner (`FLAKEY_APPROVER_SLACK_ID`, currently `U0C4RUL6CMQ`) can run these commands, in the original task thread. The bot supplies the PR number and full 40-character commit SHA in its publication reply. Replace the example placeholders:
+
+```text
+@Flakey Patch approve #123 <full-commit-SHA>
+@Flakey Patch merge #123 <same-full-commit-SHA>
+@Flakey Patch revoke #123 <same-full-commit-SHA>
+```
+
+`approve` records your authorization, marks the draft ready for review, and pauses coding. Test the preview and inspect the PR before sending it. This is **Slack authorization, not a GitHub APPROVE review**: the publishing account cannot approve its own PR, and required independent reviews must still happen in GitHub. `merge` is a separate command that squash-merges only this task's PR into develop. `revoke` withdraws authorization without merging; send a new change request to resume coding. Casual discussion such as “we can approve it” never authorizes a merge.
+
+Both approval and merge require a current Greptile review, successful `check` and `pr-agent` checks from GitHub Actions and a successful Greptile check, no other failing or pending checks/statuses, no outstanding change requests, and no unresolved review threads. The handler refuses incomplete thread listings. GitHub must enforce strict, up-to-date checks, conversation resolution and administrator rules on develop. The preview test remains your responsibility; these commands do not verify browser acceptance automatically.
+
+Approval is stored in authenticated encrypted task state and bound to the PR, Slack owner, head commit and develop commit. PR comments are an audit trail, never authorization. A changed head or develop commit requires a fresh approval; merging rechecks the gates and supplies the expected head SHA to GitHub. Duplicate events and already-merged PRs do not trigger another merge. The commands cannot operate on the setup PR into main, a different task thread, forks or unrelated branches.
 
 ## Activation
 
@@ -52,7 +68,7 @@ Configure these **Actions secrets** from the ignored agent `.env`:
 
 `FLAKEY_STATE_KEY` is 32 random bytes encoded as 64 hex characters. Keep the same value in the receiver and Actions. Losing or rotating it makes old requests and saved task state unreadable; retain it until existing tasks are closed, or explicitly migrate state.
 
-Protect develop against force pushes and deletion, and require the quality checks before merging. Greptile findings still need human assessment; a review arriving is not proof that the code is correct.
+Protect develop against force pushes and deletion. Require `check` and `pr-agent` from the GitHub Actions app, strict up-to-date checks, resolved conversations, and enforcement for administrators. Slack merging fails closed if these protections are missing. Greptile findings still need human assessment; a review arriving is not proof that the code is correct.
 
 ### Railway receiver
 

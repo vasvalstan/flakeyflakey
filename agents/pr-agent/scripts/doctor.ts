@@ -5,7 +5,7 @@ import { sandboxSnapshot } from "../sandbox";
 
 const names = ["LANGSMITH_API_KEY", "LANGSMITH_WORKSPACE_ID", "LANGSMITH_ENDPOINT",
   "OPENAI_API_KEY", "SLACK_TEAM_ID", "SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN", "FLAKEY_GITHUB_TOKEN", "FLAKEY_SANDBOX_SNAPSHOT",
-  "FLAKEY_DISPATCH_TOKEN", "FLAKEY_STATE_KEY"];
+  "FLAKEY_DISPATCH_TOKEN", "FLAKEY_STATE_KEY", "FLAKEY_APPROVER_SLACK_ID"];
 let missing = false;
 for (const name of names) {
   try { required(name); console.log(`${name}: configured`); }

@@ -33,7 +33,7 @@ Do not replace failing tests with weaker tests. Never claim a check passed unles
 When acting on Greptile, inspect each finding against current code. Fix only valid findings. Explain rejected or deferred findings in your reply.
 The orchestrator runs these required checks before it publishes: ${verificationCommands.join("; ")}.
 It also runs test:e2e and test:soak (25 cycles) when those scripts exist in the original repository version. Do not remove or weaken them.
-Return publish only if a useful code change is ready for those checks. The orchestrator opens or updates a draft PR and never merges.
+Return publish only if a useful code change is ready for those checks. This coding flow opens or updates a draft PR. It cannot approve or merge; those actions require separate exact commands from the verified Slack owner and are never model tools.
 Return stop if no changes are needed, or clarify if human input is needed. Your reply is a short Slack update; your summary is the PR description.
 Do not report that publication has happened; that happens after your response.`,
   });

@@ -65,7 +65,7 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
     if (ref) await github.request(`/git/refs/heads/${encodeURIComponent(task.branch)}`, "PATCH", { sha: head, force: false });
     else await github.request("/git/refs", "POST", { ref: `refs/heads/${task.branch}`, sha: head });
   }
-  const body = `${summary}\n\n## Source\n${scope.slackUrl}\n\n## Verification\n${task.verification.logs.map(log => `- Passed: \`${log.command}\``).join("\n")}\n\nTested change digest: \`${task.verification.digest}\`\n\nDraft for human review. Greptile findings are reviewed before corrections; no automatic merge.`;
+  const body = `${summary}\n\n## Source\n${scope.slackUrl}\n\n## Verification\n${task.verification.logs.map(log => `- Passed: \`${log.command}\``).join("\n")}\n\nTested change digest: \`${task.verification.digest}\`\n\nDraft for human review. Merge in GitHub, or use the owner's explicit commit-specific approve and merge commands in the original Slack thread. Greptile alone never authorizes a merge.`;
   let pr = (await github.prs(task.branch))[0];
   if (pr && pr.state !== "open") throw new Error("This thread already has a closed PR. Start a new thread.");
   if (!pr) {
@@ -80,7 +80,7 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
   await requestDraftReview(github, pr.number, head);
   const next: Task = { ...task, parentSha: head, parentTree: tree.sha, prNumber: pr.number, prUrl: pr.html_url,
     reviewRounds: task.reviewRounds + (task.reviewHead ? 1 : 0), reviewHead: undefined,
-    verification: undefined, awaitingReview: true };
+    verification: undefined, awaitingReview: true, approval: undefined };
   // Update the local baseline only after publication. If this fails, retained
   // state and GitHub's tree allow the same tool call to be retried safely.
   await execute(backend, `cd ${workspace} && git add -A && git -c user.name='Flakey Patch' -c user.email='flakey-patch@users.noreply.github.com' commit --allow-empty -qm 'Published checkpoint'`);

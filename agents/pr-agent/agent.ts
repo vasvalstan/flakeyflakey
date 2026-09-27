@@ -9,6 +9,7 @@ import { scopeFor, threadIdFor, verifyEnvelope, type Envelope, type AgentEvent, 
 import { prepare, publish, readReview } from "./workflow";
 import { verify, type Backend } from "./workspace";
 import type { Task } from "./state";
+import { approvalCommand, approvalHelp, handleApproval } from "./approval";
 
 export const stateSchema = new StateSchema({
   envelope: z.custom<Envelope>(),
@@ -50,6 +51,20 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
       if (config.configurable?.thread_id !== threadIdFor(event)) throw new Error("Input belongs to another agent thread.");
       const reset = { event, reply: "", scheduleReview: false, decision: undefined, review: undefined };
       if (state.processed.includes(event.eventId)) return { ...reset, route: "skip" as const };
+      const command = event.kind === "slack" ? approvalCommand(event.text) : undefined;
+      if (command) {
+        try {
+          return { ...reset, ...await handleApproval(deps.github, event, state.task, command), diagnostic: undefined, route: "finish" as const };
+        } catch (error) {
+          // Command parsing and execution never enter the model or sandbox.
+          return { ...reset, diagnostic: undefined, route: "finish" as const,
+            reply: `Command not completed: ${error instanceof Error ? error.message : "Check GitHub and retry."}` };
+        }
+      }
+      if (state.task?.merged) return { ...reset, route: "finish" as const,
+        reply: event.kind === "slack" ? "This PR has been merged. Start a new Slack thread for new work." : "" };
+      if (state.task?.approval) return { ...reset, route: "finish" as const,
+        reply: event.kind === "slack" ? `This revision has your approval, so coding is paused. Merge it or revoke authorization first.\n${approvalHelp(state.task)}` : "" };
       if (event.kind === "review") {
         if (!state.task?.awaitingReview || event.expectedHead !== state.task.parentSha) return { ...reset, route: "finish" as const };
         try {
@@ -58,7 +73,7 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
             scheduleReview: event.attempt < 10,
             reply: event.attempt >= 10 ? `Greptile has not submitted a review for the current commit yet. ${state.task.prUrl}\nMention me with “check the review” to retry. Check that Greptile reviews draft PRs.` : "" };
           if (state.task.reviewRounds >= maxReviewRounds) return { ...reset, route: "finish" as const,
-            task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}. I will not merge it.` };
+            task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}.\n${approvalHelp(state.task)}` };
           return { ...reset, review, task: { ...state.task, reviewHead: review.head, awaitingReview: false }, route: "work" as const };
         } catch (error) {
           return { ...reset, ...failure("review", error, `Review could not be checked. Inspect the PR and this Actions run and the private EU trace before retrying. ${state.task.prUrl ?? ""}`) };
@@ -73,7 +88,7 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
           task: { ...state.task, verification: undefined, reviewHead: undefined, awaitingReview: true },
           scheduleReview: true, reply: `Greptile is still reviewing the current commit. I’ll check again before starting more coding. ${state.task.prUrl}` };
         if (state.task && review && state.task.reviewRounds >= maxReviewRounds) return { ...reset, request, review, route: "finish" as const,
-          task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}. I will not merge it.` };
+          task: { ...state.task, awaitingReview: false }, reply: `The two correction rounds are complete. Please review ${state.task.prUrl}.\n${approvalHelp(state.task)}` };
         return { ...reset, request, review, route: "work" as const,
           ...(state.task ? { task: { ...state.task, verification: undefined, reviewHead: review?.status === "reviewed" ? review.head : undefined } } : {}) };
       } catch (error) {
@@ -103,7 +118,7 @@ export function buildGraph(deps: Deps, checkpointer?: Parameters<StateGraph<type
       try {
         const scope = scopeFor(state.event!);
         const task = await publish(deps.github, await deps.backend(scope), scope, state.task!, state.decision!.title, state.decision!.summary);
-        return { task, scheduleReview: true, reply: `Draft PR: ${task.prUrl}\n${state.decision!.reply}\nRequired checks passed. I’ll check for Greptile’s review; merging stays with you.` };
+        return { task, scheduleReview: true, reply: `Draft PR: ${task.prUrl}\n${state.decision!.reply}\nSandbox checks passed. I’ll check for Greptile’s review.\n${approvalHelp(task)}` };
       } catch (error) { return failure("publish", error, "Publication did not finish cleanly. A branch or draft PR may already exist. Check GitHub and the Actions run and private EU trace before retrying; this Slack thread reuses its existing branch."); }
     })
     .addNode("finish", async state => {

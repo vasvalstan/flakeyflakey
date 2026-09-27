@@ -12,4 +12,6 @@ export type Task = {
   reviewHead?: string;
   verification?: { digest: string; logs: { command: string; output: string }[] };
   awaitingReview?: boolean;
+  approval?: { head: string; base: string; userId: string; eventId: string };
+  merged?: { head: string; commit: string };
 };

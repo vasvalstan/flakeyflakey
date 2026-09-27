@@ -13,6 +13,15 @@ export type ReviewComment = {
   id: number; body: string; html_url: string; path: string; line: number | null;
   commit_id: string; pull_request_review_id: number; user: { login: string; type: string };
 };
+export type MergeGate = {
+  id: string; isDraft: boolean; headRefOid: string; baseRefOid: string;
+  mergeStateStatus: string; reviewDecision: string | null;
+  baseRef: { branchProtectionRule: {
+    requiresStrictStatusChecks: boolean; isAdminEnforced: boolean;
+    requiresConversationResolution: boolean; requiredStatusCheckContexts: string[];
+  } | null } | null;
+  reviewThreads: { pageInfo: { hasNextPage: boolean }; nodes: { isResolved: boolean }[] };
+};
 
 export class GitHub {
   private readonly root = `/repos/${repository.owner}/${repository.name}`;
@@ -53,6 +62,50 @@ export class GitHub {
     return this.list<PullRequest>(`/pulls?state=all&head=${encodeURIComponent(`${repository.owner}:${branch}`)}`);
   }
   pr(number: number) { return this.request<PullRequest>(`/pulls/${number}`); }
+
+  private async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const response = await this.fetcher("https://api.github.com/graphql", {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
+      headers: { Authorization: `Bearer ${await this.credential()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (!response.ok) throw new GitHubError(response.status);
+    const result = await response.json() as { data?: T; errors?: unknown[] };
+    if (!result.data || result.errors?.length) throw new Error("GitHub could not verify the PR's merge requirements. Check token access.");
+    return result.data;
+  }
+
+  async mergeGate(number: number) {
+    const result = await this.graphql<{ repository: { pullRequest: MergeGate | null } }>(`query($number:Int!) {
+      repository(owner:"${repository.owner}",name:"${repository.name}") {
+        pullRequest(number:$number) { id isDraft headRefOid baseRefOid mergeStateStatus reviewDecision
+          baseRef { branchProtectionRule { requiresStrictStatusChecks isAdminEnforced requiresConversationResolution requiredStatusCheckContexts } }
+          reviewThreads(first:100) { pageInfo { hasNextPage } nodes { isResolved } }
+        }
+      }
+    }`, { number });
+    if (!result.repository.pullRequest) throw new Error("Task PR was not found.");
+    return result.repository.pullRequest;
+  }
+
+  async markReady(number: number, head: string) {
+    const pr = await this.mergeGate(number);
+    if (pr.headRefOid !== head) throw new Error("PR commit changed before marking ready.");
+    if (pr.isDraft) await this.graphql(`mutation($id:ID!) {
+      markPullRequestReadyForReview(input:{pullRequestId:$id}) { pullRequest { id } }
+    }`, { id: pr.id });
+  }
+
+  async checkRuns(head: string) {
+    type Check = { name: string; status: string; conclusion: string | null; app: { id: number } };
+    const result: Check[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const data = await this.request<{ check_runs: Check[] }>(`/commits/${head}/check-runs?filter=latest&per_page=100&page=${page}`);
+      result.push(...data.check_runs);
+      if (data.check_runs.length < 100) return result;
+    }
+    throw new Error("Too many checks to verify safely.");
+  }
 
   async archive(sha: string): Promise<Uint8Array> {
     if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("Expected a pinned Git commit.");
