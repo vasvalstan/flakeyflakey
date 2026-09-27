@@ -64,7 +64,7 @@ Configure these **Actions secrets** from the ignored agent `.env`:
 - `FLAKEY_STATE_KEY`
 - Optional `SLACK_HISTORY_TOKEN`
 
-`FLAKEY_GITHUB_TOKEN` is a fine-grained token restricted to this repository, with Contents read/write, Pull requests read/write and Metadata read. It creates PRs and commits instead of the workflow's built-in token, so the resulting CI events can run normally. The built-in token only reads code and Actions artifacts.
+`FLAKEY_GITHUB_TOKEN` is a fine-grained token restricted to this repository, with Contents read/write, Pull requests read/write, Metadata read and **Administration read**. Read-only Administration is needed to inspect branch-protection rules before an approval or merge; Administration write is not needed. The token creates PRs and commits instead of the workflow's built-in token, so the resulting CI events can run normally. The built-in token only reads code and Actions artifacts.
 
 `FLAKEY_STATE_KEY` is 32 random bytes encoded as 64 hex characters. Keep the same value in the receiver and Actions. Losing or rotating it makes old requests and saved task state unreadable; retain it until existing tasks are closed, or explicitly migrate state.
 

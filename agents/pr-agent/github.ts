@@ -70,7 +70,10 @@ export class GitHub {
       body: JSON.stringify({ query, variables }),
     });
     if (!response.ok) throw new GitHubError(response.status);
-    const result = await response.json() as { data?: T; errors?: unknown[] };
+    const result = await response.json() as { data?: T; errors?: { type?: string; path?: string[] }[] };
+    if (result.errors?.some(error => error.type === "FORBIDDEN" && error.path?.includes("branchProtectionRule"))) {
+      throw new Error("The GitHub token needs repository Administration: read to inspect branch protections. No merge was attempted.");
+    }
     if (!result.data || result.errors?.length) throw new Error("GitHub could not verify the PR's merge requirements. Check token access.");
     return result.data;
   }

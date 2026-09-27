@@ -65,3 +65,11 @@ test("GitHub pagination reads subsequent pages", async () => {
     ? Array.from({ length: 100 }, (_, id) => ({ id })) : [{ id: 100 }]));
   expect((await client.list("/pulls")).length).toBe(101);
 });
+
+test("missing protection-read permission fails closed with a specific setup instruction", async () => {
+  const client = new GitHub(async () => "test-token", async () => Response.json({
+    data: { repository: { pullRequest: null } },
+    errors: [{ type: "FORBIDDEN", path: ["repository", "pullRequest", "baseRef", "branchProtectionRule"], message: "test-token" }],
+  }));
+  await expect(client.mergeGate(7)).rejects.toThrow("Administration: read");
+});

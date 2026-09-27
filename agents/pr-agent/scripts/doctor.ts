@@ -1,5 +1,5 @@
 import { assertEuEndpoint, required, slackChannelId } from "../config";
-import { GitHub } from "../github";
+import { GitHub, GitHubError } from "../github";
 import { Slack } from "../slack";
 import { sandboxSnapshot } from "../sandbox";
 
@@ -34,6 +34,21 @@ if (message) {
 const repo = await new GitHub().repo();
 console.log(`GitHub repository read access: OK (default branch ${repo.default_branch}); write access is checked on first publication`);
 if (!await new GitHub().branch("develop")) throw new Error("Create the develop branch before activation.");
+try {
+  const protection = await new GitHub().request<{
+    required_status_checks?: { strict: boolean; contexts: string[] };
+    enforce_admins?: { enabled: boolean }; required_conversation_resolution?: { enabled: boolean };
+  }>("/branches/develop/protection");
+  if (!protection.required_status_checks?.strict || !protection.enforce_admins?.enabled ||
+      !protection.required_conversation_resolution?.enabled ||
+      !["check", "pr-agent"].every(name => protection.required_status_checks!.contexts.includes(name))) {
+    throw new Error("Configure develop's strict check/pr-agent checks, conversation resolution and administrator enforcement before Slack merging.");
+  }
+  console.log("develop protection read access and merge rules: OK");
+} catch (error) {
+  if (error instanceof GitHubError && error.status === 403) throw new Error("Add repository Administration: read to FLAKEY_GITHUB_TOKEN to verify branch protection. Administration write is not needed.");
+  throw error;
+}
 await sandboxSnapshot();
 console.log("EU sandbox snapshot: ready");
 console.log("Model key is configured; no paid model call was made. No messages or PRs were created.");
