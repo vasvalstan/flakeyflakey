@@ -2,7 +2,7 @@ import { GitHub, GitHubError, isGreptile, greptileReviewComplete, type PullReque
 import { maxReviewRounds, prBaseBranch, workspace } from "./config";
 import type { RunScope } from "./policy";
 import type { Task } from "./state";
-import { capture, digestChanges, execute, initialise, type Backend } from "./workspace";
+import { capture, digestChanges, execute, initialise, stageVerifiedChanges, type Backend } from "./workspace";
 
 export async function prepare(github: GitHub, backend: Backend, scope: RunScope, previous?: Task): Promise<Task> {
   if (previous && previous.key !== scope.key) throw new Error("Task belongs to another Slack thread.");
@@ -50,6 +50,8 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
     treeEntries.push({ path: change.path, mode: change.mode, type: "blob", sha: blob?.sha ?? null });
   }
   const tree = await github.request<{ sha: string }>("/git/trees", "POST", { base_tree: task.parentTree, tree: treeEntries });
+  const stagedTree = await stageVerifiedChanges(backend, task, changes);
+  if (stagedTree !== tree.sha) throw new Error("Local files changed while staging. Verify again before publishing.");
   const ref = await github.branch(task.branch);
   let head: string;
   if (ref && ref.object.sha !== task.parentSha) {
@@ -83,7 +85,7 @@ export async function publish(github: GitHub, backend: Backend, scope: RunScope,
     verification: undefined, awaitingReview: true, approval: undefined };
   // Update the local baseline only after publication. If this fails, retained
   // state and GitHub's tree allow the same tool call to be retried safely.
-  await execute(backend, `cd ${workspace} && git add -A && git -c user.name='Flakey Patch' -c user.email='flakey-patch@users.noreply.github.com' commit --allow-empty -qm 'Published checkpoint'`);
+  await execute(backend, `cd ${workspace} && git -c user.name='Flakey Patch' -c user.email='flakey-patch@users.noreply.github.com' commit --allow-empty -qm 'Published checkpoint'`);
   next.localBase = await execute(backend, `cd ${workspace} && git rev-parse 'HEAD^{tree}'`);
   if (next.localBase !== tree.sha) throw new Error("Local files changed while publishing. Stop and reconcile the published PR.");
   return next;

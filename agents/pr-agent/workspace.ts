@@ -72,6 +72,13 @@ export async function capture(backend: Backend, task: Task): Promise<Change[]> {
 
 export const digestChanges = (changes: Change[]) => sha256(JSON.stringify(changes));
 
+export async function stageVerifiedChanges(backend: Backend, task: Task, changes: Change[]) {
+  if (!changes.length || !/^[a-f0-9]{40}$/.test(task.localBase)) throw new Error("Expected verified changes and a pinned local baseline.");
+  // Reset only the index, preserving working files. Literal pathspecs keep
+  // filenames containing glob characters from staging unrelated files.
+  return execute(backend, `cd ${workspace} && git read-tree ${quote(task.localBase)} && git --literal-pathspecs add -A -- ${changes.map(change => quote(change.path)).join(" ")} && git write-tree`);
+}
+
 export async function verify(backend: Backend, task: Task): Promise<Task["verification"]> {
   const before = await capture(backend, task);
   if (!before.length) throw new Error("No changes to verify.");

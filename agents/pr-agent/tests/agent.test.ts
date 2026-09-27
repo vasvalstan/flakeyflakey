@@ -43,7 +43,7 @@ function fixture(action: Decision["action"] = "publish", failCheck = false, fail
     throw new Error(`Unexpected path ${path}`);
   });
   const backend: Backend = {
-    execute: async command => { calls.commands.push(command); return { output: command.includes("rev-parse") ? tree : command.includes("git show")
+    execute: async command => { calls.commands.push(command); return { output: command.includes("rev-parse") || command.includes("write-tree") ? tree : command.includes("git show")
       ? JSON.stringify({ scripts: { "test:e2e": "playwright test", "test:soak": "bun scripts/soak-studio.ts" } }) : "passed",
       exitCode: failCheck && command.includes("test:e2e") ? 1 : 0 }; },
     uploadFiles: async () => [{}],
