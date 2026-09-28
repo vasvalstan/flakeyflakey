@@ -71,7 +71,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
             Release confidence, without the noise
           </div>
           <h1 id="onboarding-title">
-            Know if you can ship.
+            Ready to ship?
             <span>Know exactly why.</span>
           </h1>
           <p>
